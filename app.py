@@ -11,31 +11,23 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("☕ Starbucks Coffee Analysis")
-st.write("Explore coffee nutrition data and machine learning predictions.")
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# Load dataset
+st.title("☕ Starbucks Coffee Analysis")
+st.write("Explore Starbucks coffee nutrition data and predictions.")
+
+# Load CSV dataset
 @st.cache_data
 def load_data():
-    possible_files = [
-        "starbucks.csv",
-        "coffee.csv",
-        "starbucks_drinkMenu_expanded.csv"
-    ]
-
-    for file in possible_files:
-        if os.path.exists(file):
-            return pd.read_csv(file)
-
+    csv_path = os.path.join(BASE_DIR, "starbucks.csv")
+    if os.path.exists(csv_path):
+        return pd.read_csv(csv_path)
     return None
 
 coffee_df = load_data()
 
 if coffee_df is None:
-    st.warning(
-        "Dataset CSV file nahi mili. "
-        "Apni Starbucks CSV file GitHub repository mein upload karein."
-    )
+    st.error("starbucks.csv file nahi mili. GitHub par filename check karein.")
     st.stop()
 
 # Dataset overview
@@ -48,12 +40,10 @@ col2.metric("Total Columns", coffee_df.shape[1])
 st.subheader("Coffee Dataset")
 st.dataframe(coffee_df, use_container_width=True)
 
-st.subheader("Dataset Information")
-st.write("Dataset shape:", coffee_df.shape)
-st.write("Missing values per column:")
+st.subheader("Missing Values")
 st.dataframe(coffee_df.isnull().sum().rename("Missing Values"))
 
-# Numeric columns
+# EDA
 numeric_df = coffee_df.select_dtypes(include="number")
 numeric_columns = numeric_df.columns.tolist()
 
@@ -66,50 +56,39 @@ if numeric_columns:
     )
 
     col1, col2, col3 = st.columns(3)
-    col1.metric(
-        "Average",
-        f"{numeric_df[selected_column].mean():.2f}"
-    )
-    col2.metric(
-        "Minimum",
-        f"{numeric_df[selected_column].min():.2f}"
-    )
-    col3.metric(
-        "Maximum",
-        f"{numeric_df[selected_column].max():.2f}"
-    )
+    col1.metric("Average", f"{numeric_df[selected_column].mean():.2f}")
+    col2.metric("Minimum", f"{numeric_df[selected_column].min():.2f}")
+    col3.metric("Maximum", f"{numeric_df[selected_column].max():.2f}")
 
     st.subheader(f"{selected_column} Distribution")
     fig, ax = plt.subplots()
-    numeric_df[selected_column].dropna().hist(
-        bins=20, ax=ax
-    )
+    numeric_df[selected_column].dropna().hist(bins=20, ax=ax)
     ax.set_xlabel(selected_column)
     ax.set_ylabel("Number of drinks")
     st.pyplot(fig)
     plt.close(fig)
 
-    st.subheader("Nutrition Correlation")
     if len(numeric_columns) >= 2:
-        fig, ax = plt.subplots(figsize=(9, 5))
+        st.subheader("Nutrition Correlation")
+        fig, ax = plt.subplots(figsize=(10, 6))
         corr = numeric_df.corr()
-        image = ax.imshow(corr, cmap="coolwarm", aspect="auto")
+        im = ax.imshow(corr, cmap="coolwarm", aspect="auto")
         ax.set_xticks(range(len(corr.columns)))
         ax.set_xticklabels(corr.columns, rotation=90)
         ax.set_yticks(range(len(corr.columns)))
         ax.set_yticklabels(corr.columns)
-        fig.colorbar(image, ax=ax)
+        fig.colorbar(im, ax=ax)
         st.pyplot(fig)
         plt.close(fig)
 
     st.subheader("Summary Statistics")
     st.dataframe(numeric_df.describe())
 
-# Decision Tree prediction
+# Machine learning model
 st.header("🤖 Coffee Nutrition Prediction")
 
 model_path = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)),
+    BASE_DIR,
     "starbucks_decision_tree(1).pkl"
 )
 
@@ -118,52 +97,42 @@ if os.path.exists(model_path):
         model = joblib.load(model_path)
         st.success("Decision Tree model loaded successfully!")
 
-        st.write(
-            "Prediction ke liye apne trained model ke "
-            "required input features select karein."
-        )
-
         if hasattr(model, "feature_names_in_"):
             features = list(model.feature_names_in_)
         else:
-            features = numeric_columns
+            features = []
 
-        available_features = [
-            col for col in features if col in coffee_df.columns
-        ]
-
-        if len(available_features) == len(features) and features:
+        if features and all(f in coffee_df.columns for f in features):
             inputs = {}
+
             for feature in features:
-                default_value = float(
-                    pd.to_numeric(
-                        coffee_df[feature], errors="coerce"
-                    ).median()
+                values = pd.to_numeric(
+                    coffee_df[feature], errors="coerce"
                 )
+                default_value = values.median()
                 if pd.isna(default_value):
                     default_value = 0.0
 
                 inputs[feature] = st.number_input(
-                    feature,
-                    value=default_value
+                    feature, value=float(default_value)
                 )
 
             if st.button("Predict"):
-                input_df = pd.DataFrame([inputs])
+                input_df = pd.DataFrame([inputs], columns=features)
                 prediction = model.predict(input_df)
                 st.success(f"Prediction: {prediction[0]}")
         else:
             st.info(
-                "Model ke required features dataset columns se "
-                "match nahi kar rahe. Training features check karein."
+                "Model ke training features identify nahi huay. "
+                "Prediction ke liye original training columns check karein."
             )
 
     except Exception as e:
-        st.error(f"Model load/prediction error: {e}")
+        st.error(f"Model error: {e}")
 else:
     st.warning(
         "Model file nahi mili. GitHub par "
-        "'starbucks_decision_tree(1).pkl' ka exact naam check karein."
+        "starbucks_decision_tree(1).pkl ka exact naam check karein."
     )
 
 st.caption("Starbucks Coffee EDA and Machine Learning Project")
