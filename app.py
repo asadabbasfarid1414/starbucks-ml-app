@@ -1,4 +1,16 @@
+import streamlit as st
+import pandas as pd
+import matplotlib.pyplot as plt
+import os
+import joblib
 
+st.set_page_config(
+    page_title="Starbucks Coffee EDA",
+    page_icon="☕",
+    layout="wide"
+)
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 # Machine Learning Model
 st.header("🤖 Coffee Nutrition Prediction")
 
